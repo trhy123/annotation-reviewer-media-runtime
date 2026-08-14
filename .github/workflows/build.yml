@@ -50,7 +50,9 @@ jobs:
 
       - name: Build shared runtime
         shell: msys2 {0}
-        run: bash scripts/build_runtime.sh windows-amd64
+        run: |
+          export PKG_CONFIG_PATH="$PWD/.work/windows-amd64/deps/lib/pkgconfig:$PWD/.work/windows-amd64/prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          bash scripts/build_runtime.sh windows-amd64
 
       - name: Create 7z archive
         shell: pwsh
@@ -95,6 +97,7 @@ jobs:
       - name: Build shared runtime
         run: |
           export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+          export PKG_CONFIG_PATH="$PWD/.work/macos-arm64/deps/lib/pkgconfig:$PWD/.work/macos-arm64/prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
           "$(brew --prefix bash)/bin/bash" scripts/build_runtime.sh macos-arm64
 
       - name: Create tar.xz archive
@@ -128,6 +131,7 @@ jobs:
       - name: Build shared runtime
         run: |
           export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+          export PKG_CONFIG_PATH="$PWD/.work/macos-amd64/deps/lib/pkgconfig:$PWD/.work/macos-amd64/prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
           "$(brew --prefix bash)/bin/bash" scripts/build_runtime.sh macos-amd64
 
       - name: Create tar.xz archive
@@ -173,6 +177,7 @@ jobs:
       - name: Build shared runtime
         run: |
           export PATH="$HOME/.local/bin:$PATH"
+          export PKG_CONFIG_PATH="$PWD/.work/linux-amd64/deps/lib/pkgconfig:$PWD/.work/linux-amd64/prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
           meson --version
           bash scripts/build_runtime.sh linux-amd64
 
