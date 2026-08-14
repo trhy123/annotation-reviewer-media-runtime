@@ -82,16 +82,20 @@ jobs:
     timeout-minutes: 180
     env:
       MACOSX_DEPLOYMENT_TARGET: '12.0'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
+      HOMEBREW_NO_ENV_HINTS: '1'
+      LDFLAGS: '-Wl,-headerpad_max_install_names'
     steps:
       - uses: actions/checkout@v6
 
       - name: Install build dependencies
-        run: |
-          brew update
-          brew install meson ninja pkg-config nasm yasm freetype fribidi harfbuzz
+        run: brew install bash coreutils meson ninja pkg-config nasm yasm freetype fribidi harfbuzz
 
       - name: Build shared runtime
-        run: bash scripts/build_runtime.sh macos-arm64
+        run: |
+          export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+          "$(brew --prefix bash)/bin/bash" scripts/build_runtime.sh macos-arm64
 
       - name: Create tar.xz archive
         run: tar -cJf dist/media-runtime-macos-arm64.tar.xz -C dist media-runtime-macos-arm64
@@ -111,16 +115,20 @@ jobs:
     timeout-minutes: 180
     env:
       MACOSX_DEPLOYMENT_TARGET: '12.0'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
+      HOMEBREW_NO_ENV_HINTS: '1'
+      LDFLAGS: '-Wl,-headerpad_max_install_names'
     steps:
       - uses: actions/checkout@v6
 
       - name: Install build dependencies
-        run: |
-          brew update
-          brew install meson ninja pkg-config nasm yasm freetype fribidi harfbuzz
+        run: brew install bash coreutils meson ninja pkg-config nasm yasm freetype fribidi harfbuzz
 
       - name: Build shared runtime
-        run: bash scripts/build_runtime.sh macos-amd64
+        run: |
+          export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+          "$(brew --prefix bash)/bin/bash" scripts/build_runtime.sh macos-amd64
 
       - name: Create tar.xz archive
         run: tar -cJf dist/media-runtime-macos-amd64.tar.xz -C dist media-runtime-macos-amd64
@@ -148,21 +156,25 @@ jobs:
             build-essential \
             git \
             pkg-config \
-            meson \
             ninja-build \
             nasm \
             yasm \
             patchelf \
             xz-utils \
+            python3-pip \
             libfreetype6-dev \
             libfribidi-dev \
             libharfbuzz-dev \
             libfontconfig1-dev \
             libva-dev \
             libdrm-dev
+          python3 -m pip install --user 'meson>=1.3,<2'
 
       - name: Build shared runtime
-        run: bash scripts/build_runtime.sh linux-amd64
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          meson --version
+          bash scripts/build_runtime.sh linux-amd64
 
       - name: Create tar.xz archive
         run: tar -cJf dist/media-runtime-linux-amd64.tar.xz -C dist media-runtime-linux-amd64
