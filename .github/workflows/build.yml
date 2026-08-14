@@ -1,0 +1,177 @@
+name: Build shared media runtime
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build.yml'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'versions.env'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows-amd64:
+    name: Windows x64
+    runs-on: windows-2025
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up MSYS2 UCRT64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: inherit
+          install: >-
+            git
+            make
+            diffutils
+            pkgconf
+            xz
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-meson
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-nasm
+            mingw-w64-ucrt-x86_64-yasm
+            mingw-w64-ucrt-x86_64-freetype
+            mingw-w64-ucrt-x86_64-fribidi
+            mingw-w64-ucrt-x86_64-harfbuzz
+
+      - name: Build shared runtime
+        shell: msys2 {0}
+        run: bash scripts/build_runtime.sh windows-amd64
+
+      - name: Create 7z archive
+        shell: pwsh
+        run: |
+          $src = 'dist/media-runtime-windows-amd64'
+          $archive = 'dist/media-runtime-windows-amd64.7z'
+          if (-not (Test-Path -LiteralPath $src -PathType Container)) {
+            throw "Missing runtime directory: $src"
+          }
+          if (Test-Path -LiteralPath $archive) {
+            Remove-Item -LiteralPath $archive -Force
+          }
+          & 7z a -t7z -mx=9 -m0=LZMA2 -md=64m -mfb=273 -ms=on -mmt=on $archive $src
+          if ($LASTEXITCODE -ne 0) { throw "7-Zip failed with exit code $LASTEXITCODE" }
+          Get-Item $archive | Select-Object Name, Length
+
+      - name: Upload Windows runtime
+        uses: actions/upload-artifact@v7
+        with:
+          name: media-runtime-windows-amd64.7z
+          path: dist/media-runtime-windows-amd64.7z
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
+
+  macos-arm64:
+    name: macOS Apple Silicon
+    runs-on: macos-15
+    timeout-minutes: 180
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install build dependencies
+        run: |
+          brew update
+          brew install meson ninja pkg-config nasm yasm freetype fribidi harfbuzz
+
+      - name: Build shared runtime
+        run: bash scripts/build_runtime.sh macos-arm64
+
+      - name: Create tar.xz archive
+        run: tar -cJf dist/media-runtime-macos-arm64.tar.xz -C dist media-runtime-macos-arm64
+
+      - name: Upload macOS arm64 runtime
+        uses: actions/upload-artifact@v7
+        with:
+          name: media-runtime-macos-arm64.tar.xz
+          path: dist/media-runtime-macos-arm64.tar.xz
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
+
+  macos-amd64:
+    name: macOS Intel
+    runs-on: macos-15-intel
+    timeout-minutes: 180
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install build dependencies
+        run: |
+          brew update
+          brew install meson ninja pkg-config nasm yasm freetype fribidi harfbuzz
+
+      - name: Build shared runtime
+        run: bash scripts/build_runtime.sh macos-amd64
+
+      - name: Create tar.xz archive
+        run: tar -cJf dist/media-runtime-macos-amd64.tar.xz -C dist media-runtime-macos-amd64
+
+      - name: Upload macOS Intel runtime
+        uses: actions/upload-artifact@v7
+        with:
+          name: media-runtime-macos-amd64.tar.xz
+          path: dist/media-runtime-macos-amd64.tar.xz
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
+
+  linux-amd64:
+    name: Linux x64
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            git \
+            pkg-config \
+            meson \
+            ninja-build \
+            nasm \
+            yasm \
+            patchelf \
+            xz-utils \
+            libfreetype6-dev \
+            libfribidi-dev \
+            libharfbuzz-dev \
+            libfontconfig1-dev \
+            libva-dev \
+            libdrm-dev
+
+      - name: Build shared runtime
+        run: bash scripts/build_runtime.sh linux-amd64
+
+      - name: Create tar.xz archive
+        run: tar -cJf dist/media-runtime-linux-amd64.tar.xz -C dist media-runtime-linux-amd64
+
+      - name: Upload Linux runtime
+        uses: actions/upload-artifact@v7
+        with:
+          name: media-runtime-linux-amd64.tar.xz
+          path: dist/media-runtime-linux-amd64.tar.xz
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
