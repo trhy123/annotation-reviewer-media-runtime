@@ -72,11 +72,10 @@ jobs:
       - name: Upload Windows runtime
         uses: actions/upload-artifact@v7
         with:
-          name: media-runtime-windows-amd64.7z
           path: dist/media-runtime-windows-amd64.7z
           archive: false
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   macos-arm64:
     name: macOS Apple Silicon
@@ -106,11 +105,10 @@ jobs:
       - name: Upload macOS arm64 runtime
         uses: actions/upload-artifact@v7
         with:
-          name: media-runtime-macos-arm64.tar.xz
           path: dist/media-runtime-macos-arm64.tar.xz
           archive: false
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   macos-amd64:
     name: macOS Intel
@@ -140,11 +138,10 @@ jobs:
       - name: Upload macOS Intel runtime
         uses: actions/upload-artifact@v7
         with:
-          name: media-runtime-macos-amd64.tar.xz
           path: dist/media-runtime-macos-amd64.tar.xz
           archive: false
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   linux-amd64:
     name: Linux x64
@@ -187,8 +184,76 @@ jobs:
       - name: Upload Linux runtime
         uses: actions/upload-artifact@v7
         with:
-          name: media-runtime-linux-amd64.tar.xz
           path: dist/media-runtime-linux-amd64.tar.xz
           archive: false
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
+
+  release:
+    name: Publish CI pre-release
+    needs:
+      - windows-amd64
+      - macos-arm64
+      - macos-amd64
+      - linux-amd64
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Download runtime artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          find release-assets -maxdepth 2 -type f -print
+          test -f release-assets/media-runtime-windows-amd64.7z
+          test -f release-assets/media-runtime-macos-arm64.tar.xz
+          test -f release-assets/media-runtime-macos-amd64.tar.xz
+          test -f release-assets/media-runtime-linux-amd64.tar.xz
+
+      - name: Publish pre-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          TAG="runtime-ci-${GITHUB_RUN_NUMBER}"
+          TITLE="Shared media runtime CI #${GITHUB_RUN_NUMBER}"
+
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$TITLE" \
+              --notes "Automated experimental shared media runtime built from ${GITHUB_SHA}." \
+              --prerelease
+          fi
+
+          gh release upload "$TAG" \
+            release-assets/media-runtime-windows-amd64.7z \
+            release-assets/media-runtime-macos-arm64.tar.xz \
+            release-assets/media-runtime-macos-amd64.tar.xz \
+            release-assets/media-runtime-linux-amd64.tar.xz \
+            --clobber
+
+      - name: Delete temporary Actions artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
+            --jq '.artifacts[].id' |
+          while read -r artifact_id; do
+            if [[ -n "$artifact_id" ]]; then
+              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+            fi
+          done
