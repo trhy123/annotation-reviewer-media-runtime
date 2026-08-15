@@ -2,6 +2,27 @@ name: Build shared media runtime
 
 on:
   workflow_dispatch:
+    inputs:
+      build_windows:
+        description: Build Windows x64
+        required: false
+        default: true
+        type: boolean
+      build_macos_arm64:
+        description: Build macOS Apple Silicon (arm64)
+        required: false
+        default: true
+        type: boolean
+      build_macos_amd64:
+        description: Build macOS Intel (x86-64)
+        required: false
+        default: true
+        type: boolean
+      build_linux:
+        description: Build Linux x64
+        required: false
+        default: true
+        type: boolean
   push:
     branches:
       - main
@@ -21,6 +42,7 @@ permissions:
 jobs:
   windows-amd64:
     name: Windows x64
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_windows }}
     runs-on: windows-2025
     timeout-minutes: 180
     steps:
@@ -72,6 +94,7 @@ jobs:
       - name: Upload Windows runtime
         uses: actions/upload-artifact@v7
         with:
+          name: media-runtime-windows-amd64.7z
           path: dist/media-runtime-windows-amd64.7z
           compression-level: 0
           if-no-files-found: error
@@ -79,6 +102,7 @@ jobs:
 
   macos-arm64:
     name: macOS Apple Silicon
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_macos_arm64 }}
     runs-on: macos-15
     timeout-minutes: 180
     env:
@@ -105,6 +129,7 @@ jobs:
       - name: Upload macOS arm64 runtime
         uses: actions/upload-artifact@v7
         with:
+          name: media-runtime-macos-arm64.tar.xz
           path: dist/media-runtime-macos-arm64.tar.xz
           compression-level: 0
           if-no-files-found: error
@@ -112,6 +137,7 @@ jobs:
 
   macos-amd64:
     name: macOS Intel
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_macos_amd64 }}
     runs-on: macos-15-intel
     timeout-minutes: 180
     env:
@@ -138,6 +164,7 @@ jobs:
       - name: Upload macOS Intel runtime
         uses: actions/upload-artifact@v7
         with:
+          name: media-runtime-macos-amd64.tar.xz
           path: dist/media-runtime-macos-amd64.tar.xz
           compression-level: 0
           if-no-files-found: error
@@ -145,6 +172,7 @@ jobs:
 
   linux-amd64:
     name: Linux x64
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_linux }}
     runs-on: ubuntu-22.04
     timeout-minutes: 180
     steps:
@@ -184,6 +212,7 @@ jobs:
       - name: Upload Linux runtime
         uses: actions/upload-artifact@v7
         with:
+          name: media-runtime-linux-amd64.tar.xz
           path: dist/media-runtime-linux-amd64.tar.xz
           compression-level: 0
           if-no-files-found: error
@@ -196,7 +225,14 @@ jobs:
       - macos-arm64
       - macos-amd64
       - linux-amd64
+    if: >-
+      ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.build_windows || inputs.build_macos_arm64 || inputs.build_macos_amd64 || inputs.build_linux) && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
+    env:
+      BUILD_WINDOWS: ${{ github.event_name != 'workflow_dispatch' || inputs.build_windows }}
+      BUILD_MACOS_ARM64: ${{ github.event_name != 'workflow_dispatch' || inputs.build_macos_arm64 }}
+      BUILD_MACOS_AMD64: ${{ github.event_name != 'workflow_dispatch' || inputs.build_macos_amd64 }}
+      BUILD_LINUX: ${{ github.event_name != 'workflow_dispatch' || inputs.build_linux }}
     permissions:
       contents: write
       actions: write
@@ -204,6 +240,7 @@ jobs:
       - name: Download runtime artifacts
         uses: actions/download-artifact@v7
         with:
+          pattern: media-runtime-*
           path: release-assets
           merge-multiple: true
 
@@ -212,10 +249,18 @@ jobs:
         run: |
           set -euo pipefail
           find release-assets -maxdepth 2 -type f -print
-          test -f release-assets/media-runtime-windows-amd64.7z
-          test -f release-assets/media-runtime-macos-arm64.tar.xz
-          test -f release-assets/media-runtime-macos-amd64.tar.xz
-          test -f release-assets/media-runtime-linux-amd64.tar.xz
+          expected_assets=()
+          [[ "${BUILD_WINDOWS}" == "true" ]] && expected_assets+=("release-assets/media-runtime-windows-amd64.7z")
+          [[ "${BUILD_MACOS_ARM64}" == "true" ]] && expected_assets+=("release-assets/media-runtime-macos-arm64.tar.xz")
+          [[ "${BUILD_MACOS_AMD64}" == "true" ]] && expected_assets+=("release-assets/media-runtime-macos-amd64.tar.xz")
+          [[ "${BUILD_LINUX}" == "true" ]] && expected_assets+=("release-assets/media-runtime-linux-amd64.tar.xz")
+          if [[ "${#expected_assets[@]}" -eq 0 ]]; then
+            echo "No platform selected for release." >&2
+            exit 1
+          fi
+          for asset in "${expected_assets[@]}"; do
+            test -f "${asset}"
+          done
 
       - name: Publish pre-release
         shell: bash
@@ -235,12 +280,16 @@ jobs:
               --prerelease
           fi
 
-          gh release upload "$TAG" \
-            release-assets/media-runtime-windows-amd64.7z \
-            release-assets/media-runtime-macos-arm64.tar.xz \
-            release-assets/media-runtime-macos-amd64.tar.xz \
-            release-assets/media-runtime-linux-amd64.tar.xz \
-            --clobber
+          assets=()
+          [[ "${BUILD_WINDOWS}" == "true" ]] && assets+=("release-assets/media-runtime-windows-amd64.7z")
+          [[ "${BUILD_MACOS_ARM64}" == "true" ]] && assets+=("release-assets/media-runtime-macos-arm64.tar.xz")
+          [[ "${BUILD_MACOS_AMD64}" == "true" ]] && assets+=("release-assets/media-runtime-macos-amd64.tar.xz")
+          [[ "${BUILD_LINUX}" == "true" ]] && assets+=("release-assets/media-runtime-linux-amd64.tar.xz")
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "No release assets found." >&2
+            exit 1
+          fi
+          gh release upload "$TAG" "${assets[@]}" --clobber
 
       - name: Delete temporary Actions artifacts
         shell: bash
