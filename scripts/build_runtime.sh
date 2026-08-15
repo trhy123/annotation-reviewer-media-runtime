@@ -233,7 +233,6 @@ meson setup "${SRC}/mpv/build" "${SRC}/mpv" \
   -Djavascript=disabled \
   -Dcplugins=disabled \
   -Dlibarchive=disabled \
-  -Dlibcurl=disabled \
   -Dlibavdevice=disabled \
   -Dlibbluray=disabled \
   -Ddvdnav=disabled \
