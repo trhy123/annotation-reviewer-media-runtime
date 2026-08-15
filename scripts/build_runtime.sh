@@ -194,6 +194,9 @@ case "${TARGET}" in
     MPV_PLATFORM_ARGS+=(
       -Dwin32-smtc=disabled
       -Dwasapi=disabled
+      # libplacebo v7 contains C++20 code, while the shared mpv target is
+      # linked through the C compiler on MinGW. Add the C++ runtime explicitly.
+      -Dc_link_args=-lstdc++
     )
     ;;
   macos-*)
@@ -207,6 +210,8 @@ case "${TARGET}" in
       -Djack=disabled
       -Dpipewire=disabled
       -Dpulse=disabled
+      # libplacebo v7 contains C++20 code, but mpv is linked by the C driver.
+      -Dc_link_args=-lstdc++
     )
     ;;
 esac
