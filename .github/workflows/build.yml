@@ -73,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           path: dist/media-runtime-windows-amd64.7z
-          archive: false
+          compression-level: 0
           if-no-files-found: error
           retention-days: 1
 
@@ -106,7 +106,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           path: dist/media-runtime-macos-arm64.tar.xz
-          archive: false
+          compression-level: 0
           if-no-files-found: error
           retention-days: 1
 
@@ -139,7 +139,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           path: dist/media-runtime-macos-amd64.tar.xz
-          archive: false
+          compression-level: 0
           if-no-files-found: error
           retention-days: 1
 
@@ -185,7 +185,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           path: dist/media-runtime-linux-amd64.tar.xz
-          archive: false
+          compression-level: 0
           if-no-files-found: error
           retention-days: 1
 
