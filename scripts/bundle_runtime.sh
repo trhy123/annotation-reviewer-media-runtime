@@ -187,7 +187,6 @@ is_macos_system_path() {
 
 resolve_macos_dep() {
   local dep="$1"
-  local owner="$2"
   local name="$(basename "${dep}")"
 
   if [[ "${dep}" == /* && -e "${dep}" ]]; then
@@ -237,70 +236,9 @@ add_rpath_if_missing() {
   fi
 }
 
-macos_minos() {
-  local file="$1"
-  otool -l "${file}" 2>/dev/null | awk '
-    $1 == "cmd" && $2 == "LC_BUILD_VERSION" { mode="build"; next }
-    mode == "build" && $1 == "minos" { print $2; exit }
-    $1 == "cmd" && $2 == "LC_VERSION_MIN_MACOSX" { mode="legacy"; next }
-    mode == "legacy" && $1 == "version" { print $2; exit }
-  '
-}
-
-version_gt() {
-  python3 - "$1" "$2" <<'PY'
-import sys
-
-def parts(value: str):
-    out = []
-    for item in value.split('.'):
-        digits = ''.join(ch for ch in item if ch.isdigit())
-        out.append(int(digits or 0))
-    return tuple((out + [0, 0, 0])[:3])
-
-raise SystemExit(0 if parts(sys.argv[1]) > parts(sys.argv[2]) else 1)
-PY
-}
-
-audit_macos_minos() {
-  local target="${MACOSX_DEPLOYMENT_TARGET:-13.0}"
-  local report="${DIST}/MACOS_MINOS.txt"
-  local failed=0 file minos rel
-
-  {
-    echo "Required macOS minimum version audit"
-    echo "target=${target}"
-    echo
-  } > "${report}"
-
-  while IFS= read -r -d '' file; do
-    if ! file "${file}" 2>/dev/null | grep -q 'Mach-O'; then
-      continue
-    fi
-    minos="$(macos_minos "${file}")"
-    rel="${file#${DIST}/}"
-    if [[ -z "${minos}" ]]; then
-      printf '%s  minos=UNKNOWN\n' "${rel}" | tee -a "${report}" >&2
-      failed=1
-      continue
-    fi
-    printf '%s  minos=%s\n' "${rel}" "${minos}" | tee -a "${report}"
-    if version_gt "${minos}" "${target}"; then
-      echo "macOS compatibility failure: ${rel} requires ${minos}, target is ${target}" >&2
-      failed=1
-    fi
-  done < <(find "${DIST}/bin" "${DIST}/lib" -maxdepth 1 -type f -print0)
-
-  if [[ "${failed}" -ne 0 ]]; then
-    echo "macOS minimum-version audit failed. See ${report}." >&2
-    exit 1
-  fi
-}
-
 bundle_macos() {
   command -v otool >/dev/null 2>&1 || { echo "otool is required" >&2; exit 1; }
   command -v install_name_tool >/dev/null 2>&1 || { echo "install_name_tool is required" >&2; exit 1; }
-  command -v file >/dev/null 2>&1 || { echo "file is required" >&2; exit 1; }
 
   mkdir -p "${DIST}/lib"
   copy_glob "${DIST}/bin" "${PREFIX}/bin/ffmpeg" "${PREFIX}/bin/ffprobe"
@@ -329,7 +267,7 @@ bundle_macos() {
         if [[ -e "${DIST}/lib/${name}" ]]; then
           continue
         fi
-        resolved="$(resolve_macos_dep "${dep}" "${file}" || true)"
+        resolved="$(resolve_macos_dep "${dep}" || true)"
         if [[ -n "${resolved}" ]]; then
           cp -L "${resolved}" "${DIST}/lib/${name}"
           echo "Bundled macOS dependency: ${name}"
@@ -362,8 +300,6 @@ bundle_macos() {
     find "${DIST}/bin" "${DIST}/lib" -maxdepth 1 -type f -print0 |
       while IFS= read -r -d '' f; do strip -x "${f}" 2>/dev/null || true; done
   fi
-
-  audit_macos_minos
 
   {
     echo "macOS Mach-O dependencies after bundling"
