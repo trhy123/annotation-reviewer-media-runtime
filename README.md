@@ -74,6 +74,14 @@ Every platform build verifies that:
 - a small C program loads/links the libmpv client and render APIs;
 - required non-system shared-library dependencies are recursively bundled;
 - macOS binaries do not exceed the declared deployment target.
+- packaged macOS `ffmpeg` and `ffprobe` are executable after removing build-time DYLD_LIBRARY_PATH;
+- an independent C `dlopen()` check loads the **packaged** libmpv from its explicit path, calls `mpv_create` and `mpv_initialize`, and verifies the render API without overriding DYLD_LIBRARY_PATH;
+- external or unresolved Mach-O dependencies and broken/escaping symlinks fail the audit.
+
+Runtime archives are build inputs, **not** notarized applications. The consuming
+Annotation Reviewer release must embed these libraries and tools in a signed
+and Apple-notarized `.app` to avoid Gatekeeper blocking downloaded helpers.
+Ad-hoc code signing alone is not sufficient for public distribution.
 
 Resolved source commits and file sizes are recorded in `BUILD_INFO.txt`.
 
