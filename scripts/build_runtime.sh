@@ -321,6 +321,13 @@ elif [[ "${TARGET}" == macos-* ]]; then
   RUNTIME_FFMPEG="${DIST}/bin/ffmpeg"
   RUNTIME_FFPROBE="${DIST}/bin/ffprobe"
   unset DYLD_LIBRARY_PATH || true
+  python3 "${ROOT}/scripts/verify_macos_runtime.py" "${DIST}"
+  # dlopen the actual distributed library, without DYLD_LIBRARY_PATH, from a
+  # standalone test program that does not link against the build-prefix mpv.
+  PACKAGED_LIBMPV="${DIST}/lib/libmpv.2.dylib"
+  [[ -f "${PACKAGED_LIBMPV}" ]] || { echo "packaged libmpv missing" >&2; exit 1; }
+  "${CC_BIN}" "${ROOT}/tests/mpv_dlopen_smoke.c" -o "${WORK}/mpv_dlopen_smoke"
+  "${WORK}/mpv_dlopen_smoke" "${PACKAGED_LIBMPV}"
 else
   RUNTIME_FFMPEG="${DIST}/bin/ffmpeg"
   RUNTIME_FFPROBE="${DIST}/bin/ffprobe"
@@ -348,6 +355,8 @@ fi
 if [[ "${TARGET}" == windows-* ]]; then
   PATH="${DIST}/bin:${PATH}" "${SMOKE_BIN}"
 elif [[ "${TARGET}" == macos-* ]]; then
+  # Also retain the build-linked smoke as a secondary coverage check. The
+  # independent dlopen check above is the authoritative portability gate.
   DYLD_LIBRARY_PATH="${DIST}/lib" "${SMOKE_BIN}"
 else
   LD_LIBRARY_PATH="${DIST}/lib" "${SMOKE_BIN}"

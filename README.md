@@ -66,6 +66,10 @@ libmpv is built as a shared library with the render API and OpenGL/plain-GL supp
 
 ## Validation
 
+Builds and source checks share the manual `build.yml` workflow. Deselect every
+platform to run source checks only; this does not build or publish runtimes.
+There is no automatic full build on push or PR updates.
+
 Every platform build verifies that:
 
 - packaged `ffmpeg` and `ffprobe` start successfully;
@@ -73,7 +77,16 @@ Every platform build verifies that:
 - `ffprobe` enumerates per-frame `best_effort_timestamp_time` values;
 - a small C program loads/links the libmpv client and render APIs;
 - required non-system shared-library dependencies are recursively bundled;
+- Linux dependency closure is checked without `LD_LIBRARY_PATH`/`LD_PRELOAD`, so missing libraries or broken `$ORIGIN` paths fail the build;
 - macOS binaries do not exceed the declared deployment target.
+- packaged macOS `ffmpeg` and `ffprobe` are executable after removing build-time DYLD_LIBRARY_PATH;
+- an independent C `dlopen()` check loads the **packaged** libmpv from its explicit path, calls `mpv_create` and `mpv_initialize`, and verifies the render API without overriding DYLD_LIBRARY_PATH;
+- external or unresolved Mach-O dependencies and broken/escaping symlinks fail the audit.
+
+Runtime archives are build inputs, **not** notarized applications. The consuming
+Annotation Reviewer release must embed these libraries and tools in a signed
+and Apple-notarized `.app` to avoid Gatekeeper blocking downloaded helpers.
+Ad-hoc code signing alone is not sufficient for public distribution.
 
 Resolved source commits and file sizes are recorded in `BUILD_INFO.txt`.
 
