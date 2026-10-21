@@ -118,7 +118,7 @@ linux_ldd_paths() {
   LD_LIBRARY_PATH="${DIST}/lib:${PREFIX}/lib:${LD_LIBRARY_PATH:-}" ldd "${file}" 2>/dev/null |
     awk '
       /=> \/[^ ]+/ {print $3}
-      /^\s*\// {print $1}
+      /^[[:space:]]*\// {print $1}
     ' | sort -u
 }
 
@@ -138,6 +138,7 @@ bundle_linux() {
     "${PREFIX}/lib/libswresample.so*"
 
   [[ -f "${DIST}/bin/ffmpeg" ]] || { echo "ffmpeg was not installed" >&2; exit 1; }
+  [[ -f "${DIST}/bin/ffprobe" ]] || { echo "ffprobe was not installed" >&2; exit 1; }
   compgen -G "${DIST}/lib/libmpv.so*" >/dev/null || { echo "libmpv.so was not installed" >&2; exit 1; }
 
   local changed=1 file path name
@@ -161,7 +162,7 @@ bundle_linux() {
     patchelf --set-rpath '$ORIGIN/../lib' "${f}"
   done < <(find "${DIST}/bin" -maxdepth 1 -type f -print0)
   while IFS= read -r -d '' f; do
-    patchelf --set-rpath '$ORIGIN' "${f}" 2>/dev/null || true
+    patchelf --set-rpath '$ORIGIN' "${f}"
   done < <(find "${DIST}/lib" -maxdepth 1 -type f -print0)
 
   if command -v strip >/dev/null 2>&1; then
@@ -169,15 +170,37 @@ bundle_linux() {
       while IFS= read -r -d '' f; do strip --strip-unneeded "${f}" 2>/dev/null || true; done
   fi
 
+  # Validate the relocated runtime itself: LD_LIBRARY_PATH must not mask a
+  # broken $ORIGIN/RUNPATH or a missing transitive dependency.
+  local dependency_error=0 report status resolved runtime_root
+  runtime_root="$(cd "${DIST}" && pwd -P)"
   {
-    echo "Linux ELF dependencies after bundling"
+    echo "Linux ELF dependencies after bundling (without LD_LIBRARY_PATH/LD_PRELOAD)"
     echo
     while IFS= read -r -d '' file; do
       echo "[${file#${DIST}/}]"
-      LD_LIBRARY_PATH="${DIST}/lib" ldd "${file}" 2>/dev/null | sed 's/^/  /' || true
+      status=0
+      report="$(env -u LD_LIBRARY_PATH -u LD_PRELOAD ldd "${file}" 2>&1)" || status=$?
+      printf '%s\n' "${report}" | sed 's/^/  /'
+      if [[ "${status}" -ne 0 ]] || grep -q 'not found' <<< "${report}"; then
+        dependency_error=1
+      fi
+      while IFS= read -r path; do
+        is_linux_system_lib "$(basename "${path}")" && continue
+        resolved="$(readlink -f -- "${path}")" || { dependency_error=1; continue; }
+        if [[ "${resolved}" != "${runtime_root}/lib/"* ]]; then
+          echo "  Non-system dependency escaped the runtime: ${resolved}"
+          dependency_error=1
+        fi
+      done < <(printf '%s\n' "${report}" | awk '/=> \/[^ ]+/ {print $3} /^[[:space:]]*\// {print $1}')
       echo
     done < <(find "${DIST}/bin" "${DIST}/lib" -maxdepth 1 -type f -print0 | sort -z)
   } > "${DIST}/DEPENDENCIES.txt"
+  if [[ "${dependency_error}" -ne 0 ]]; then
+    cat "${DIST}/DEPENDENCIES.txt" >&2
+    echo "Linux runtime dependency closure failed" >&2
+    exit 1
+  fi
 }
 
 is_macos_system_path() {
