@@ -18,6 +18,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Compile Python audit
         run: python3 -m py_compile scripts/verify_macos_runtime.py
+      - name: Verify dependency audit regressions
+        run: python3 -m unittest discover -s tests -p test_verify_macos_runtime.py -v
       - name: Compile independent libmpv loader test
         run: cc -Wall -Wextra -Werror tests/mpv_dlopen_smoke.c -o /tmp/mpv_dlopen_smoke
       - name: Check shell script syntax

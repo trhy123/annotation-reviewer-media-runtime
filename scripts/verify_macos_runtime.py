@@ -45,8 +45,8 @@ def verify(root: Path) -> list[str]:
                 if dep.startswith(SYSTEM_PREFIXES):
                     continue
                 if dep.startswith("@rpath/"):
-                    sibling = lib_dir / dep.partition("/")[2]
-                    if sibling.is_file():
+                    sibling = (lib_dir / dep.partition("/")[2]).resolve()
+                    if sibling.is_file() and sibling.is_relative_to(root.resolve()):
                         continue
                 elif dep.startswith("@loader_path/"):
                     target = (item.parent / dep[len("@loader_path/"):]).resolve()
