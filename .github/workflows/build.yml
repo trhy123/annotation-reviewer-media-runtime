@@ -23,14 +23,6 @@ on:
         required: false
         default: true
         type: boolean
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/build.yml'
-      - 'scripts/**'
-      - 'tests/**'
-      - 'versions.env'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
